@@ -7,47 +7,58 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
-pub struct HashTable<V: Clone + std::fmt::Debug> {
-    buckets: Vec<Option<V>>,
+pub struct HashTable<K, V> {
+    buckets: Vec<Vec<(K, V)>>,
 }
 
-impl<V: Clone + std::fmt::Debug> HashTable<V> {
-    pub fn new() -> HashTable<V> {
+impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::fmt::Debug>
+    HashTable<K, V>
+{
+    pub fn new() -> HashTable<K, V> {
         HashTable {
-            buckets: vec![None; 10],
+            buckets: vec![vec![]; 10],
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> HashTable<V> {
+    pub fn with_capacity(capacity: usize) -> HashTable<K, V> {
         HashTable {
-            buckets: vec![None; capacity],
+            buckets: vec![vec![]; capacity],
         }
     }
 
-    fn get_bucket_index<K: std::hash::Hash>(&self, k: &K) -> usize {
+    fn get_bucket_index(&self, k: &K) -> usize {
         let hash = calculate_hash(k);
-        println!("hash computed: {}", hash);
+        // println!("hash computed: {}", hash);
         let bucket_index = hash as usize % self.buckets.capacity();
-        println!("bucket index computed: {}", bucket_index);
+        // println!("bucket index computed: {}", bucket_index);
         bucket_index
     }
 
-    pub fn insert<K: std::hash::Hash + std::fmt::Debug>(&mut self, k: K, v: V) -> () {
+    pub fn insert(&mut self, k: K, v: V) -> () {
         let bucket_index = self.get_bucket_index(&k);
-        // implement separate chaining collision resolution
-        if let Some(existing_v) = &self.buckets[bucket_index] {
+
+        // implement separate chaining with linked lists collision resolution
+        if let Some((existing_k, existing_v)) = &self.buckets[bucket_index].get(0) {
             // we have a collision
-            println!(
-                "we have a collision on insert for {:?} against existing value {:?}",
-                v, existing_v
-            );
+            // println!(
+            //     "we have a collision on insert for {:?} against existing value {:?}",
+            //     v, existing_v
+            // );
+            self.buckets[bucket_index].push((k, v));
+        } else {
+            // first time the bucket is being used
+            self.buckets[bucket_index].push((k, v));
         }
-        self.buckets[bucket_index] = Some(v);
     }
 
-    pub fn get<K: std::hash::Hash>(&self, k: K) -> &Option<V> {
+    pub fn get(&self, k: K) -> Option<&V> {
         let bucket_index = self.get_bucket_index(&k);
-        &self.buckets[bucket_index]
+        for (ek, v) in &self.buckets[bucket_index] {
+            if ek == &k {
+                return Some(v);
+            }
+        }
+        return None;
     }
 }
 
@@ -72,11 +83,14 @@ mod tests {
             },
         );
 
+        // println!("current buckets {:?}", hash_table.buckets);
+
         let result = hash_table.get("gedalia");
-        let expected_result = &Some(User {
+        let gedalia = User {
             name: "gedalia".to_string(),
             age: 27,
-        });
+        };
+        let expected_result = Some(&gedalia);
 
         assert_eq!(result, expected_result);
     }
@@ -103,14 +117,16 @@ mod tests {
         let gedalia_result = hash_table.get("gedalia");
         let theo_result = hash_table.get("theo");
 
-        let expected_gedalia_result = &Some(User {
+        let gedalia = User {
             name: "gedalia".to_string(),
             age: 27,
-        });
-        let expected_theo_result = &Some(User {
+        };
+        let expected_gedalia_result = Some(&gedalia);
+        let theo = User {
             name: "theo".to_string(),
             age: 0,
-        });
+        };
+        let expected_theo_result = Some(&theo);
 
         assert_eq!(gedalia_result, expected_gedalia_result);
         assert_eq!(theo_result, expected_theo_result);
