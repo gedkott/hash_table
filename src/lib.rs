@@ -28,27 +28,13 @@ impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::f
 
     fn get_bucket_index(&self, k: &K) -> usize {
         let hash = calculate_hash(k);
-        // println!("hash computed: {}", hash);
         let bucket_index = hash as usize % self.buckets.capacity();
-        // println!("bucket index computed: {}", bucket_index);
         bucket_index
     }
 
     pub fn insert(&mut self, k: K, v: V) -> () {
         let bucket_index = self.get_bucket_index(&k);
-
-        // implement separate chaining with linked lists collision resolution
-        if let Some((existing_k, existing_v)) = &self.buckets[bucket_index].get(0) {
-            // we have a collision
-            // println!(
-            //     "we have a collision on insert for {:?} against existing value {:?}",
-            //     v, existing_v
-            // );
-            self.buckets[bucket_index].push((k, v));
-        } else {
-            // first time the bucket is being used
-            self.buckets[bucket_index].push((k, v));
-        }
+        self.buckets[bucket_index].push((k, v));
     }
 
     pub fn get(&self, k: K) -> Option<&V> {
@@ -82,8 +68,6 @@ mod tests {
                 age: 27,
             },
         );
-
-        // println!("current buckets {:?}", hash_table.buckets);
 
         let result = hash_table.get("gedalia");
         let gedalia = User {
