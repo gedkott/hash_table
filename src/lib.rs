@@ -12,15 +12,23 @@ pub struct HashTable<K, V> {
     total_entries: usize,
 }
 
-impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::fmt::Debug>
-    HashTable<K, V>
+impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::fmt::Debug> Default
+    for HashTable<K, V>
 {
-    pub fn new() -> HashTable<K, V> {
+    fn default() -> Self {
         let default_number_of_starting_buckets = 10;
         HashTable {
             buckets: vec![vec![]; default_number_of_starting_buckets],
             total_entries: 0,
         }
+    }
+}
+
+impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::fmt::Debug>
+    HashTable<K, V>
+{
+    pub fn new() -> HashTable<K, V> {
+        Default::default()
     }
 
     pub fn with_capacity(capacity: usize) -> HashTable<K, V> {
@@ -34,7 +42,7 @@ impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::f
         self.total_entries as f64 / self.buckets.len() as f64
     }
 
-    pub fn insert(&mut self, k: K, v: V) -> () {
+    pub fn insert(&mut self, k: K, v: V) {
         let hash = calculate_hash(&k);
         let bucket_index = hash as usize % self.buckets.capacity();
         self.buckets[bucket_index].push((k, v));
@@ -63,7 +71,7 @@ impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::f
                 return Some(v);
             }
         }
-        return None;
+        None
     }
 }
 
