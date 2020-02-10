@@ -10,7 +10,6 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 pub struct HashTable<K, V> {
     buckets: Vec<Vec<(K, V)>>,
     total_entries: usize,
-    total_buckets: usize,
 }
 
 impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::fmt::Debug>
@@ -21,7 +20,6 @@ impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::f
         HashTable {
             buckets: vec![vec![]; default_number_of_starting_buckets],
             total_entries: 0,
-            total_buckets: default_number_of_starting_buckets,
         }
     }
 
@@ -29,34 +27,37 @@ impl<K: std::hash::Hash + std::fmt::Debug + Clone + PartialEq, V: Clone + std::f
         HashTable {
             buckets: vec![vec![]; capacity],
             total_entries: 0,
-            total_buckets: capacity,
         }
     }
 
     fn load_factor(&self) -> f64 {
-        // println!("te: {}, tb: {}, lf: {}", self.total_entries, self.total_buckets, self.total_entries as f64 / self.total_buckets as f64);
-        self.total_entries as f64 / self.total_buckets as f64
-    }
-
-    fn get_bucket_index(&self, k: &K) -> usize {
-        let hash = calculate_hash(k);
-        let bucket_index = hash as usize % self.buckets.capacity();
-        bucket_index
+        self.total_entries as f64 / self.buckets.len() as f64
     }
 
     pub fn insert(&mut self, k: K, v: V) -> () {
-        let bucket_index = self.get_bucket_index(&k);
+        let hash = calculate_hash(&k);
+        let bucket_index = hash as usize % self.buckets.capacity();
         self.buckets[bucket_index].push((k, v));
         self.total_entries += 1;
         let current_load_factor = self.load_factor();
-        println!("current load factor of {}", current_load_factor);
         if current_load_factor > 0.75 {
-            println!("load factor threshold reached; should resize");
+            let mut new_buckets: Vec<Vec<(K, V)>> = vec![vec![]; self.buckets.capacity() * 2];
+
+            for bucket in &mut self.buckets {
+                for (ek, ev) in bucket.drain(..) {
+                    let hash = calculate_hash(&ek);
+                    let bucket_index = hash as usize % new_buckets.capacity();
+                    new_buckets[bucket_index].push((ek, ev));
+                }
+            }
+
+            self.buckets = new_buckets;
         }
     }
 
     pub fn get(&self, k: K) -> Option<&V> {
-        let bucket_index = self.get_bucket_index(&k);
+        let hash = calculate_hash(&k);
+        let bucket_index = hash as usize % self.buckets.capacity();
         for (ek, v) in &self.buckets[bucket_index] {
             if ek == &k {
                 return Some(v);
