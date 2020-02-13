@@ -12,9 +12,7 @@ pub struct HashTable<K, V> {
     total_entries: usize,
 }
 
-impl<K: std::hash::Hash + PartialEq, V> Default
-    for HashTable<K, V>
-{
+impl<K: std::hash::Hash + PartialEq, V> Default for HashTable<K, V> {
     fn default() -> Self {
         let default_number_of_starting_buckets = 10;
         let mut buckets: Vec<Vec<(K, V)>> = vec![];
@@ -29,9 +27,7 @@ impl<K: std::hash::Hash + PartialEq, V> Default
     }
 }
 
-impl<K: std::hash::Hash + PartialEq, V>
-    HashTable<K, V>
-{
+impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
     pub fn new() -> HashTable<K, V> {
         Default::default()
     }
@@ -60,7 +56,7 @@ impl<K: std::hash::Hash + PartialEq, V>
         let current_load_factor = self.load_factor();
         if current_load_factor > 0.75 {
             let mut new_buckets: Vec<Vec<(K, V)>> = vec![];
-            let extended_number_of_buckets =  self.buckets.len() * 2;
+            let extended_number_of_buckets = self.buckets.len() * 2;
             for _ in 0..extended_number_of_buckets {
                 new_buckets.push(vec![]);
             }
@@ -77,11 +73,11 @@ impl<K: std::hash::Hash + PartialEq, V>
         }
     }
 
-    pub fn get(&self, k: K) -> Option<&V> {
-        let hash = calculate_hash(&k);
+    pub fn get(&self, k: &K) -> Option<&V> {
+        let hash = calculate_hash(k);
         let bucket_index = hash as usize % self.buckets.len();
         for (ek, v) in &self.buckets[bucket_index] {
-            if ek == &k {
+            if ek == k {
                 return Some(v);
             }
         }
@@ -93,7 +89,7 @@ impl<K: std::hash::Hash + PartialEq, V>
 mod tests {
     use crate::HashTable;
 
-    #[derive(PartialEq, Debug)]
+    #[derive(PartialEq, Debug, Clone)]
     struct User {
         name: String,
         age: i32,
@@ -110,11 +106,30 @@ mod tests {
             },
         );
 
-        let result = hash_table.get("gedalia");
+        let result = hash_table.get(&"gedalia");
         let gedalia = User {
             name: "gedalia".to_string(),
             age: 27,
         };
+        let expected_result = Some(&gedalia);
+
+        assert_eq!(result, expected_result);
+    }
+
+    #[test]
+    fn test_get_key_parameter_is_not_moved() {
+        let mut hash_table = HashTable::new();
+
+        let gedalia_string = String::from("gedalia");
+
+        let gedalia = User {
+            name: gedalia_string.clone(),
+            age: 27,
+        };
+
+        hash_table.insert(gedalia_string.clone(), gedalia.clone());
+
+        let result = hash_table.get(&gedalia_string);
         let expected_result = Some(&gedalia);
 
         assert_eq!(result, expected_result);
@@ -139,8 +154,8 @@ mod tests {
             },
         );
 
-        let gedalia_result = hash_table.get("gedalia");
-        let theo_result = hash_table.get("theo");
+        let gedalia_result = hash_table.get(&"gedalia");
+        let theo_result = hash_table.get(&"theo");
 
         let gedalia = User {
             name: "gedalia".to_string(),
@@ -196,8 +211,8 @@ mod tests {
             hash_table.insert(user.name.to_string(), user);
         }
 
-        let gedalia_result = hash_table.get("gedalia".to_string());
-        let caine_result = hash_table.get("caine".to_string());
+        let gedalia_result = hash_table.get(&"gedalia".to_string());
+        let caine_result = hash_table.get(&"caine".to_string());
 
         let gedalia = &User {
             name: "gedalia".to_string(),
