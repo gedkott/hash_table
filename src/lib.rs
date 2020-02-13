@@ -83,6 +83,10 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         }
         None
     }
+
+    pub fn capacity(&self) -> usize {
+        self.buckets.len()
+    }
 }
 
 #[cfg(test)]
@@ -173,8 +177,10 @@ mod tests {
     }
 
     #[test]
-    fn test_load_factor_threshold_calculation() {
+    fn test_dynamic_resizing() {
         let mut hash_table = HashTable::with_capacity(9);
+
+        assert_eq!(hash_table.capacity(), 9);
 
         let users = vec![
             User {
@@ -207,25 +213,29 @@ mod tests {
             },
         ];
 
-        for user in &users {
+        for user in users {
             hash_table.insert(user.name.to_string(), user);
         }
 
-        let gedalia_result = hash_table.get(&"gedalia".to_string());
-        let caine_result = hash_table.get(&"caine".to_string());
+        let gedalia_result = hash_table.get(&String::from("gedalia"));
+        let caine_result = hash_table.get(&String::from("caine"));
 
         let gedalia = &User {
             name: "gedalia".to_string(),
             age: 27,
         };
-        let expected_gedalia_result = Some(&gedalia);
+        let expected_gedalia_result = Some(gedalia);
         let caine = &User {
             name: "caine".to_string(),
             age: 22,
         };
-        let expected_caine_result = Some(&caine);
+        let expected_caine_result = Some(caine);
 
         assert_eq!(gedalia_result, expected_gedalia_result);
         assert_eq!(caine_result, expected_caine_result);
+
+        assert!(hash_table.capacity() > 9);
+        assert_eq!(hash_table.capacity(), 18);
+        assert_ne!(hash_table.capacity(), 9);
     }
 }
