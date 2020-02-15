@@ -21,7 +21,7 @@ impl<K: std::hash::Hash + PartialEq, V> Default for HashTable<K, V> {
         }
 
         HashTable {
-            buckets: buckets,
+            buckets,
             total_entries: 0,
         }
     }
@@ -39,7 +39,7 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         }
 
         HashTable {
-            buckets: buckets,
+            buckets,
             total_entries: 0,
         }
     }
@@ -86,6 +86,64 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
 
     pub fn capacity(&self) -> usize {
         self.buckets.len()
+    }
+}
+
+pub struct HashTableIterator<'a, K, V> {
+    current_bucket_index: usize,
+    current_element_index: usize,
+    table: &'a HashTable<K, V>,
+}
+
+impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
+    type Item = &'a (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let i = self.current_bucket_index;
+        let curr_bucket = &self.table.buckets[i];
+        let next_item = curr_bucket.get(self.current_element_index);
+        match next_item {
+            Some(e) => {
+                // println!("still on current bucket index");
+                // println!("bi {} ei {}, nei {}", i, self.current_element_index, self.current_element_index + 1);
+                self.current_element_index += 1;
+                Some(e)
+            }
+            None => {
+                // println!("current bucket and index combo resulted in None");
+                // println!("curr bucket has {} elements", curr_bucket.len());
+                if self.current_element_index + 1 < curr_bucket.len() {
+                    // println!("still on current bucket index");
+                    // println!("bi {} ei {}, nei {}", i, self.current_element_index, self.current_element_index + 1);
+                    self.current_element_index += 1;
+                } else {
+                    // println!("bucket fully checked");
+                    // println!("bi {} ei {}, nbi {} nei {}", i, self.current_element_index, i + 1, 0);
+                    if self.current_bucket_index + 1 >= self.table.buckets.len() {
+                        return None;
+                    } else {
+                        self.current_bucket_index += 1;
+                        self.current_element_index = 0;
+                        return self.next();
+                    }
+                }
+                self.next()
+            }
+        }
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
+    type Item = &'a (K, V);
+
+    type IntoIter = HashTableIterator<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        HashTableIterator {
+            current_element_index: 0,
+            current_bucket_index: 0,
+            table: self,
+        }
     }
 }
 
@@ -237,5 +295,60 @@ mod tests {
         assert!(hash_table.capacity() > 9);
         assert_eq!(hash_table.capacity(), 18);
         assert_ne!(hash_table.capacity(), 9);
+    }
+
+    #[test]
+    fn test_iteration_over_hash_table() {
+        let mut hash_table = HashTable::with_capacity(9);
+
+        let users = vec![
+            User {
+                name: "gedalia".to_string(),
+                age: 27,
+            },
+            User {
+                name: "theo".to_string(),
+                age: 0,
+            },
+            User {
+                name: "aviva".to_string(),
+                age: 26,
+            },
+            User {
+                name: "chani".to_string(),
+                age: 25,
+            },
+            User {
+                name: "nachmi".to_string(),
+                age: 24,
+            },
+            User {
+                name: "avery".to_string(),
+                age: 23,
+            },
+            User {
+                name: "caine".to_string(),
+                age: 22,
+            },
+        ];
+
+        for user in users {
+            hash_table.insert(user.name.to_string(), user);
+        }
+
+        for (k, v) in &hash_table {
+            println!("{} {:?}", k, v);
+        }
+
+        // should still be able to use hash table AKA this should compile
+        hash_table.insert(
+            String::from("nowhereman"),
+            User {
+                name: String::from("nowhereman"),
+                age: -1,
+            },
+        );
+
+        hash_table.get(&String::from("nowhereman"));
     }
 }
