@@ -120,24 +120,17 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
     type Item = &'a (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        // keep going on this bucket
-        // println!("keep going on this bucket");
         self.elements_iterator.next().or_else(|| {
-            // println!("no element available in this bucket; iterating to next bucket and recursing");
+            // no element available in this bucket
+            // iterating to next bucket and either
+            // ending iteration or recursing
             self.current_bucket = self.buckets_iterator.next();
-            let b = match &self.current_bucket {
-                Some(b) => {
-                    // println!("bucket is avaiable");
-                    b
-                }
-                None => {
-                    // println!("no bucket is avaiable");
-                    return None;
-                }
-            };
-            let elements_iterator = b.iter();
-            self.elements_iterator = Box::new(elements_iterator);
-            self.next()
+            self.current_bucket.and_then(|b| {
+                // bucket is available so we are recursing
+                let elements_iterator = b.iter();
+                self.elements_iterator = Box::new(elements_iterator);
+                self.next()
+            })
         })
     }
 }
