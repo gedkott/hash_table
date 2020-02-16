@@ -90,47 +90,9 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
 }
 
 pub struct HashTableIterator<'a, K, V> {
-    current_bucket_index: usize,
-    current_element_index: usize,
-    table: &'a HashTable<K, V>,
-}
-
-impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
-    type Item = &'a (K, V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let i = self.current_bucket_index;
-        let curr_bucket = &self.table.buckets[i];
-        let next_item = curr_bucket.get(self.current_element_index);
-        match next_item {
-            Some(e) => {
-                // println!("still on current bucket index");
-                // println!("bi {} ei {}, nei {}", i, self.current_element_index, self.current_element_index + 1);
-                self.current_element_index += 1;
-                Some(e)
-            }
-            None => {
-                // println!("current bucket and index combo resulted in None");
-                // println!("curr bucket has {} elements", curr_bucket.len());
-                if self.current_element_index + 1 < curr_bucket.len() {
-                    // println!("still on current bucket index");
-                    // println!("bi {} ei {}, nei {}", i, self.current_element_index, self.current_element_index + 1);
-                    self.current_element_index += 1;
-                } else {
-                    // println!("bucket fully checked");
-                    // println!("bi {} ei {}, nbi {} nei {}", i, self.current_element_index, i + 1, 0);
-                    if self.current_bucket_index + 1 >= self.table.buckets.len() {
-                        return None;
-                    } else {
-                        self.current_bucket_index += 1;
-                        self.current_element_index = 0;
-                        return self.next();
-                    }
-                }
-                self.next()
-            }
-        }
-    }
+    current_bucket: Option<&'a Vec<(K, V)>>,
+    elements_iterator: Option<Box<dyn Iterator<Item=&'a (K, V)> + 'a>>,
+    buckets_iterator: Box<dyn Iterator<Item=&'a Vec<(K, V)>> + 'a>,
 }
 
 impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
@@ -139,10 +101,66 @@ impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
     type IntoIter = HashTableIterator<'a, K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
+        let mut buckets_iterator = self.buckets.iter();
+        let current_bucket = buckets_iterator.next();
         HashTableIterator {
-            current_element_index: 0,
-            current_bucket_index: 0,
-            table: self,
+            current_bucket,
+            elements_iterator: None,
+            buckets_iterator: Box::new(buckets_iterator),
+        }
+    }
+}
+
+impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
+    type Item = &'a (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let b = match &self.current_bucket {
+            Some(b) => {
+                // println!("bucket is avaiable");
+                b
+            },
+            None => {
+                // println!("no bucket is avaiable");
+                return None
+            }
+        };
+        
+        match &mut self.elements_iterator {
+            Some(ei) => {
+                // keep going on this bucket
+                // println!("keep going on this bucket");
+                match ei.next() {
+                    Some(e) => {
+                        // println!("element available");
+                        Some(e)
+                    },
+                    None => {
+                        // println!("no element available in this bucket; iterating to next bucket and recursing");
+                        self.current_bucket = self.buckets_iterator.next();
+                        let b = match &self.current_bucket {
+                            Some(b) => {
+                                // println!("bucket is avaiable");
+                                b
+                            },
+                            None => {
+                                // println!("no bucket is avaiable");
+                                return None
+                            }
+                        };
+                        let elements_iterator = b.iter();
+                        self.elements_iterator = Some(Box::new(elements_iterator));
+                        self.next()
+                    } 
+                }
+            },
+            None => {
+                // needs to be initialized
+                // println!("initing iterator over this bucket and recursing");
+                let elements_iterator = b.iter();
+                self.elements_iterator = Some(Box::new(elements_iterator));
+                self.next()
+            }
         }
     }
 }
