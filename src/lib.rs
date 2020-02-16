@@ -90,7 +90,6 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
 }
 
 pub struct HashTableIterator<'a, K, V> {
-    current_bucket: Option<&'a Vec<(K, V)>>,
     elements_iterator: Box<dyn Iterator<Item = &'a (K, V)> + 'a>,
     buckets_iterator: Box<dyn Iterator<Item = &'a Vec<(K, V)>> + 'a>,
 }
@@ -102,14 +101,12 @@ impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
 
     fn into_iter(self) -> Self::IntoIter {
         let mut buckets_iterator = self.buckets.iter();
-        let current_bucket = buckets_iterator.next();
         // first elements iterator needs to be initialized
-        let elements_iterator = match current_bucket {
+        let elements_iterator = match buckets_iterator.next() {
             Some(b) => b.iter(),
             None => [].iter(),
         };
         HashTableIterator {
-            current_bucket,
             elements_iterator: Box::new(elements_iterator),
             buckets_iterator: Box::new(buckets_iterator),
         }
@@ -124,8 +121,7 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
             // no element available in this bucket
             // iterating to next bucket and either
             // ending iteration or recursing
-            self.current_bucket = self.buckets_iterator.next();
-            self.current_bucket.and_then(|b| {
+            self.buckets_iterator.next().and_then(|b| {
                 // bucket is available so we are recursing
                 let elements_iterator = b.iter();
                 self.elements_iterator = Box::new(elements_iterator);
