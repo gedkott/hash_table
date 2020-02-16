@@ -102,10 +102,10 @@ impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
     fn into_iter(self) -> Self::IntoIter {
         let mut buckets_iterator = self.buckets.iter();
         // first elements iterator needs to be initialized
-        let elements_iterator = match buckets_iterator.next() {
-            Some(b) => b.iter(),
-            None => [].iter(),
-        };
+        let elements_iterator = buckets_iterator
+            .next()
+            .map(|bi| bi.iter())
+            .unwrap_or_else(|| [].iter());
         HashTableIterator {
             elements_iterator: Box::new(elements_iterator),
             buckets_iterator: Box::new(buckets_iterator),
