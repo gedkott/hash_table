@@ -135,7 +135,7 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
 mod tests {
     use crate::HashTable;
 
-    #[derive(PartialEq, Debug, Clone)]
+    #[derive(PartialEq, PartialOrd, Debug, Eq, Clone, Ord)]
     struct User {
         name: String,
         age: i32,
@@ -285,7 +285,7 @@ mod tests {
     fn test_iteration_over_hash_table() {
         let mut hash_table = HashTable::with_capacity(9);
 
-        let users = vec![
+        let mut users = vec![
             User {
                 name: "gedalia".to_string(),
                 age: 27,
@@ -316,23 +316,32 @@ mod tests {
             },
         ];
 
-        for user in users {
+        users.sort();
+
+        for user in &users {
             hash_table.insert(user.name.to_string(), user);
         }
 
         for (k, v) in &hash_table {
-            println!("{} {:?}", k, v);
+            let found = &users.binary_search(v);
+            assert!(found.is_ok());
+            assert!(found.map(|i| &users[i].name == k).unwrap() == true);
         }
 
+        let nowhere_man = User {
+            name: String::from("nowhereman"),
+            age: -1,
+        };
+
         // should still be able to use hash table AKA this should compile
-        hash_table.insert(
-            String::from("nowhereman"),
-            User {
+        hash_table.insert(String::from("nowhereman"), &nowhere_man);
+
+        assert_eq!(
+            hash_table.get(&String::from("nowhereman")),
+            Some(&&User {
                 name: String::from("nowhereman"),
                 age: -1,
-            },
+            })
         );
-
-        hash_table.get(&String::from("nowhereman"));
     }
 }
