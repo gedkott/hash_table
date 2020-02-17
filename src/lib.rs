@@ -12,7 +12,7 @@ pub struct HashTable<K, V> {
     total_entries: usize,
 }
 
-impl<K: std::hash::Hash + PartialEq, V> Default for HashTable<K, V> {
+impl<K, V> Default for HashTable<K, V> {
     fn default() -> Self {
         let default_number_of_starting_buckets = 10;
         let mut buckets: Vec<Vec<(K, V)>> = vec![];
@@ -21,7 +21,7 @@ impl<K: std::hash::Hash + PartialEq, V> Default for HashTable<K, V> {
         }
 
         HashTable {
-            buckets: buckets,
+            buckets,
             total_entries: 0,
         }
     }
@@ -39,7 +39,7 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         }
 
         HashTable {
-            buckets: buckets,
+            buckets,
             total_entries: 0,
         }
     }
@@ -89,11 +89,53 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
     }
 }
 
+pub struct HashTableIterator<'a, K, V> {
+    elements_iterator: Box<dyn Iterator<Item = &'a (K, V)> + 'a>,
+    buckets_iterator: Box<dyn Iterator<Item = &'a Vec<(K, V)>> + 'a>,
+}
+
+impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
+    type Item = &'a (K, V);
+
+    type IntoIter = HashTableIterator<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut buckets_iterator = self.buckets.iter();
+        // first elements iterator needs to be initialized
+        let elements_iterator = buckets_iterator
+            .next()
+            .map(|bi| bi.iter())
+            .unwrap_or_else(|| [].iter());
+        HashTableIterator {
+            elements_iterator: Box::new(elements_iterator),
+            buckets_iterator: Box::new(buckets_iterator),
+        }
+    }
+}
+
+impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
+    type Item = &'a (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.elements_iterator.next().or_else(|| {
+            // no element available in this bucket
+            // iterating to next bucket and either
+            // ending iteration or recursing
+            self.buckets_iterator.next().and_then(|b| {
+                // bucket is available so we are recursing
+                let elements_iterator = b.iter();
+                self.elements_iterator = Box::new(elements_iterator);
+                self.next()
+            })
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::HashTable;
 
-    #[derive(PartialEq, Debug, Clone)]
+    #[derive(PartialEq, PartialOrd, Debug, Eq, Clone, Ord)]
     struct User {
         name: String,
         age: i32,
@@ -237,5 +279,69 @@ mod tests {
         assert!(hash_table.capacity() > 9);
         assert_eq!(hash_table.capacity(), 18);
         assert_ne!(hash_table.capacity(), 9);
+    }
+
+    #[test]
+    fn test_iteration_over_hash_table() {
+        let mut hash_table = HashTable::with_capacity(9);
+
+        let mut users = vec![
+            User {
+                name: "gedalia".to_string(),
+                age: 27,
+            },
+            User {
+                name: "theo".to_string(),
+                age: 0,
+            },
+            User {
+                name: "aviva".to_string(),
+                age: 26,
+            },
+            User {
+                name: "chani".to_string(),
+                age: 25,
+            },
+            User {
+                name: "nachmi".to_string(),
+                age: 24,
+            },
+            User {
+                name: "avery".to_string(),
+                age: 23,
+            },
+            User {
+                name: "caine".to_string(),
+                age: 22,
+            },
+        ];
+
+        users.sort();
+
+        for user in &users {
+            hash_table.insert(user.name.to_string(), user);
+        }
+
+        for (k, v) in &hash_table {
+            let found = &users.binary_search(v);
+            assert!(found.is_ok());
+            assert!(found.map(|i| &users[i].name == k).unwrap() == true);
+        }
+
+        let nowhere_man = User {
+            name: String::from("nowhereman"),
+            age: -1,
+        };
+
+        // should still be able to use hash table AKA this should compile
+        hash_table.insert(String::from("nowhereman"), &nowhere_man);
+
+        assert_eq!(
+            hash_table.get(&String::from("nowhereman")),
+            Some(&&User {
+                name: String::from("nowhereman"),
+                age: -1,
+            })
+        );
     }
 }
