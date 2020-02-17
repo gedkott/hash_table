@@ -12,7 +12,7 @@ pub struct HashTable<K, V> {
     total_entries: usize,
 }
 
-impl<K: std::hash::Hash + PartialEq, V> Default for HashTable<K, V> {
+impl<K, V> Default for HashTable<K, V> {
     fn default() -> Self {
         let default_number_of_starting_buckets = 10;
         let mut buckets: Vec<Vec<(K, V)>> = vec![];
