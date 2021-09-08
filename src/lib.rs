@@ -422,7 +422,9 @@ mod tests {
             age: 27,
         };
 
-        let user = hash_table.entry("gedalia").or_insert(g_backup);
+        let user_entry = hash_table.entry("gedalia");
+        let user = user_entry.or_insert(g_backup);
+        // user_entry; // should not compile if uncommented since or_insert moves the entry (consumed)
         (*user).age += 100;
 
         let user = hash_table.get(&"gedalia");
