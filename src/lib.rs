@@ -73,6 +73,38 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         }
     }
 
+    pub fn insert_mut(&mut self, k: K, v: V) -> &mut V {
+        let hash = calculate_hash(&k);
+        let bucket_index = hash as usize % self.buckets.len();
+        self.buckets[bucket_index].push((k, v));
+        self.total_entries += 1;
+        let current_load_factor = self.load_factor();
+        if current_load_factor > 0.75 {
+            let mut new_buckets: Vec<Vec<(K, V)>> = vec![];
+            let extended_number_of_buckets = self.buckets.len() * 2;
+            for _ in 0..extended_number_of_buckets {
+                new_buckets.push(vec![]);
+            }
+
+            for bucket in &mut self.buckets {
+                for (ek, ev) in bucket.drain(..) {
+                    let hash = calculate_hash(&ek);
+                    let bucket_index = hash as usize % new_buckets.len();
+                    new_buckets[bucket_index].push((ek, ev));
+                }
+            }
+
+            self.buckets = new_buckets;
+            let len = self.buckets[bucket_index].len();
+            let (_, v) = self.buckets[bucket_index].get_mut(len - 1).unwrap();
+            v
+        } else {
+            let len = self.buckets[bucket_index].len();
+            let (_, v) = self.buckets[bucket_index].get_mut(len - 1).unwrap();
+            v
+        }
+    }
+
     pub fn get(&self, k: &K) -> Option<&V> {
         let hash = calculate_hash(k);
         let bucket_index = hash as usize % self.buckets.len();
@@ -84,8 +116,44 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         None
     }
 
+    pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
+        let hash = calculate_hash(k);
+        let bucket_index = hash as usize % self.buckets.len();
+        for (ek, v) in &mut self.buckets[bucket_index] {
+            if ek == k {
+                return Some(v);
+            }
+        }
+        None
+    }
+
     pub fn capacity(&self) -> usize {
         self.buckets.len()
+    }
+
+    pub fn entry(&mut self, k: K) -> Entry<'_, K, V> {
+        if self.get_mut(&k).is_some() {
+            Entry::Occupied { ht: self, k }
+        } else {
+            Entry::Vacant { ht: self, k }
+        }
+    }
+}
+
+pub enum Entry<'a, K, V> {
+    Occupied { ht: &'a mut HashTable<K, V>, k: K },
+    Vacant { ht: &'a mut HashTable<K, V>, k: K },
+}
+
+impl<'a, K: PartialEq + Hash, V> Entry<'a, K, V> {
+    pub fn or_insert(self, v: V) -> &'a mut V {
+        match self {
+            Entry::Occupied { k, ht } => {
+                let e = ht.get_mut(&k);
+                e.unwrap()
+            }
+            Entry::Vacant { k, ht } => ht.insert_mut(k, v),
+        }
     }
 }
 
@@ -343,5 +411,21 @@ mod tests {
                 age: -1,
             })
         );
+    }
+
+    #[test]
+    fn test_entry_interface() {
+        let mut hash_table: HashTable<&str, User> = HashTable::with_capacity(9);
+
+        let g_backup = User {
+            name: "gedalia".to_string(),
+            age: 27,
+        };
+
+        let user = hash_table.entry("gedalia").or_insert(g_backup);
+        (*user).age += 100;
+
+        let user = hash_table.get(&"gedalia");
+        assert_eq!(user.unwrap().age, 127);
     }
 }
