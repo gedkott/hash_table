@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_entry_interface() {
-        let mut hash_table: HashTable<&str, User> = HashTable::with_capacity(9);
+        let mut hash_table: HashTable<&str, User> = HashTable::new();
 
         let g_backup = User {
             name: "gedalia".to_string(),
