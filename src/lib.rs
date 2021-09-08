@@ -44,65 +44,65 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         }
     }
 
-    fn load_factor(&self) -> f64 {
-        self.total_entries as f64 / self.buckets.len() as f64
-    }
-
-    pub fn insert(&mut self, k: K, v: V) {
+    pub fn insert(&mut self, mut k: K, v: V) -> Option<V> {
+        // check if this key is being used
         let hash = calculate_hash(&k);
         let bucket_index = hash as usize % self.buckets.len();
-        self.buckets[bucket_index].push((k, v));
-        self.total_entries += 1;
-        let current_load_factor = self.load_factor();
-        if current_load_factor > 0.75 {
+        let mut to_remove = None;
+        for (pos, (ek, _)) in self.buckets[bucket_index].iter().enumerate() {
+            if ek == &mut k {
+                // we are using a value for this key that needs to be replaced
+                to_remove = Some(pos);
+                break;
+            }
+        }
+        match to_remove {
+            Some(index) => {
+                let (_, ov) = self.buckets[bucket_index].swap_remove(index);
+                self._insert(k, v);
+                Some(ov)
+            }
+            None => {
+                self._insert(k, v);
+                None
+            }
+        }
+    }
+
+    fn _insert(&mut self, k: K, v: V) -> &mut V {
+        // first check if we need to prepare for capacity changes
+        let new_load_factor = (self.total_entries + 1) as f64 / self.buckets.len() as f64;
+        if new_load_factor > 0.75 {
             let mut new_buckets: Vec<Vec<(K, V)>> = vec![];
-            let extended_number_of_buckets = self.buckets.len() * 2;
+            let num_buckets = self.buckets.len();
+            let extended_number_of_buckets = num_buckets * 2;
             for _ in 0..extended_number_of_buckets {
                 new_buckets.push(vec![]);
             }
 
-            for bucket in &mut self.buckets {
+            for mut bucket in self.buckets.drain(..) {
                 for (ek, ev) in bucket.drain(..) {
                     let hash = calculate_hash(&ek);
-                    let bucket_index = hash as usize % new_buckets.len();
-                    new_buckets[bucket_index].push((ek, ev));
+                    let new_bucket_index = hash as usize % new_buckets.len();
+                    new_buckets[new_bucket_index].push((ek, ev));
                 }
             }
 
             self.buckets = new_buckets;
         }
+
+        // then add the new item (give up ownership late so we can easily access the value for returning)
+        let hash = calculate_hash(&k);
+        let bucket_index = hash as usize % self.buckets.len();
+        self.buckets[bucket_index].push((k, v));
+        self.total_entries += 1;
+        let len = self.buckets[bucket_index].len();
+        let (_, v) = &mut self.buckets[bucket_index][len - 1];
+        v
     }
 
     pub fn insert_mut(&mut self, k: K, v: V) -> &mut V {
-        let hash = calculate_hash(&k);
-        let bucket_index = hash as usize % self.buckets.len();
-        self.buckets[bucket_index].push((k, v));
-        self.total_entries += 1;
-        let current_load_factor = self.load_factor();
-        if current_load_factor > 0.75 {
-            let mut new_buckets: Vec<Vec<(K, V)>> = vec![];
-            let extended_number_of_buckets = self.buckets.len() * 2;
-            for _ in 0..extended_number_of_buckets {
-                new_buckets.push(vec![]);
-            }
-
-            for bucket in &mut self.buckets {
-                for (ek, ev) in bucket.drain(..) {
-                    let hash = calculate_hash(&ek);
-                    let bucket_index = hash as usize % new_buckets.len();
-                    new_buckets[bucket_index].push((ek, ev));
-                }
-            }
-
-            self.buckets = new_buckets;
-            let len = self.buckets[bucket_index].len();
-            let (_, v) = self.buckets[bucket_index].get_mut(len - 1).unwrap();
-            v
-        } else {
-            let len = self.buckets[bucket_index].len();
-            let (_, v) = self.buckets[bucket_index].get_mut(len - 1).unwrap();
-            v
-        }
+        self._insert(k, v)
     }
 
     pub fn get(&self, k: &K) -> Option<&V> {
@@ -249,9 +249,10 @@ mod tests {
         assert_eq!(result, expected_result);
     }
 
+    // THIS TEST LIES!
     #[test]
     fn test_collisions() {
-        let mut hash_table = HashTable::with_capacity(1);
+        let mut hash_table = HashTable::with_capacity(5);
         hash_table.insert(
             "gedalia",
             User {
@@ -286,6 +287,8 @@ mod tests {
         assert_eq!(theo_result, expected_theo_result);
     }
 
+    // This test sort of does its job; I want to improve it to check that the capcity does not increase
+    // when there is enough space for the next elemtn coming in
     #[test]
     fn test_dynamic_resizing() {
         let mut hash_table = HashTable::with_capacity(9);
