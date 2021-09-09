@@ -8,7 +8,7 @@ where
     fn hash(&self, t: &K) -> u64;
 }
 
-struct DefaultSimpleHasher;
+pub struct DefaultSimpleHasher;
 impl DefaultSimpleHasher {
     fn new() -> Self {
         DefaultSimpleHasher
@@ -22,7 +22,7 @@ impl<K: Hash> SimpleHasher<K> for DefaultSimpleHasher {
     }
 }
 
-pub struct HashTable<K, V, H>
+pub struct HashTable<K, V, H = DefaultSimpleHasher>
 where
     H: SimpleHasher<K>,
     K: Hash,
@@ -324,9 +324,9 @@ mod tests {
             }
         }
 
-        // The SillyHasher will ensure that all entries are always stored i nthe first bucket making this a list,
-        // but I believe correctly testing that collisions are handled by linking entries and iterating through the
-        // entries when looking by matching keys
+        // The SillyHasher hashes keys to a constant value of 0. We store all entries in the zeroth bucket.
+        // This test uses the SillyHasher to force collisions to occur so we can assert that all key-value pairs
+        // are addressable individually even when all key hashes collide.
         let mut hash_table = HashTable::with_hasher(SillyHasher {});
         hash_table.insert(
             "gedalia",
