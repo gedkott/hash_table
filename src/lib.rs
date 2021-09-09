@@ -107,17 +107,17 @@ where
         match to_remove {
             Some(index) => {
                 let (_, ov) = self.buckets[bucket_index].swap_remove(index);
-                self._insert(k, v);
+                self._insert(k, v, hash);
                 Some(ov)
             }
             None => {
-                self._insert(k, v);
+                self._insert(k, v, hash);
                 None
             }
         }
     }
 
-    fn _insert(&mut self, k: K, v: V) -> &mut V {
+    fn _insert(&mut self, k: K, v: V, hash: u64) -> &mut V {
         // first check if we need to prepare for capacity changes
         let new_load_factor = (self.total_entries + 1) as f64 / self.buckets.len() as f64;
         if new_load_factor > 0.75 {
@@ -138,18 +138,13 @@ where
             self.buckets = new_buckets;
         }
 
-        // then add the new item (give up ownership late so we can easily access the value for returning)
-        let hash = self.hasher.hash(&k);
+        // then add the new item (give up ownership of input v late so we can easily access the value for returning)
         let bucket_index = hash as usize % self.buckets.len();
         self.buckets[bucket_index].push((k, v));
         self.total_entries += 1;
         let len = self.buckets[bucket_index].len();
         let (_, v) = &mut self.buckets[bucket_index][len - 1];
         v
-    }
-
-    pub fn insert_mut(&mut self, k: K, v: V) -> &mut V {
-        self._insert(k, v)
     }
 
     pub fn get(&self, k: &K) -> Option<&V> {
@@ -213,7 +208,10 @@ where
                 let e = ht.get_mut(&k);
                 e.unwrap()
             }
-            Entry::Vacant { k, ht } => ht.insert_mut(k, v),
+            Entry::Vacant { k, ht } => {
+                let hash = ht.hasher.hash(&k);
+                ht._insert(k, v, hash)
+            }
         }
     }
 }
