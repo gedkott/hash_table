@@ -259,7 +259,7 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
 
 #[cfg(test)]
 mod tests {
-    use std::hash::{self, Hash};
+    use std::hash::Hash;
 
     use crate::{HashTable, SimpleHasher};
 
