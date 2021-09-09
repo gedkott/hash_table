@@ -173,7 +173,7 @@ where
     }
 
     pub fn entry(&mut self, k: K) -> Entry<'_, K, V, H> {
-        if self.get_mut(&k).is_some() {
+        if self.get(&k).is_some() {
             Entry::Occupied { ht: self, k }
         } else {
             Entry::Vacant { ht: self, k }
