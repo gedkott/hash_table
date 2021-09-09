@@ -106,8 +106,7 @@ where
         }
         match to_remove {
             Some(index) => {
-                let (_, ov) = self.buckets[bucket_index].swap_remove(index);
-                self._insert(k, v, hash);
+                let (_, ov) = std::mem::replace(&mut self.buckets[bucket_index][index], (k, v));
                 Some(ov)
             }
             None => {
@@ -260,7 +259,7 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
 
 #[cfg(test)]
 mod tests {
-    use std::hash::Hash;
+    use std::hash::{self, Hash};
 
     use crate::{HashTable, SimpleHasher};
 
@@ -508,5 +507,27 @@ mod tests {
 
         let user = hash_table.get(&"gedalia");
         assert_eq!(user.unwrap().age, 127);
+    }
+
+    #[test]
+    fn test_insert_with_same_key() {
+        let mut hash_table = HashTable::new();
+
+        let g = User {
+            name: "not gedalia!".to_string(),
+            age: 27,
+        };
+
+        let user = hash_table.insert("gedalia", g);
+        assert_eq!(user, None); // first time inersting this key so None gets returned since no old value to return
+
+        let old_g = User {
+            name: "gedalia".to_string(),
+            age: 127,
+        };
+
+        let old_user = hash_table.insert("gedalia", old_g).unwrap(); // second time using key so we should overwrite entry's value and return old value
+        assert_eq!(old_user.name, "not gedalia!");
+        assert_eq!(old_user.age, 27);
     }
 }
