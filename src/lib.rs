@@ -1,38 +1,66 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-fn calculate_hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
+pub trait SimpleHasher<K>
+where
+    K: Hash,
+{
+    fn hash(&self, t: &K) -> u64;
 }
 
-pub struct HashTable<K, V> {
+struct DefaultSimpleHasher;
+impl DefaultSimpleHasher {
+    fn new() -> Self {
+        DefaultSimpleHasher
+    }
+}
+impl<K: Hash> SimpleHasher<K> for DefaultSimpleHasher {
+    fn hash(&self, t: &K) -> u64 {
+        let mut s = DefaultHasher::new();
+        t.hash(&mut s);
+        s.finish()
+    }
+}
+
+pub struct HashTable<K, V, H>
+where
+    H: SimpleHasher<K>,
+    K: Hash,
+{
     buckets: Vec<Vec<(K, V)>>,
     total_entries: usize,
+    hasher: H,
 }
 
-impl<K, V> Default for HashTable<K, V> {
+impl<K, V> Default for HashTable<K, V, DefaultSimpleHasher>
+where
+    K: Hash,
+{
     fn default() -> Self {
         let default_number_of_starting_buckets = 10;
         let mut buckets: Vec<Vec<(K, V)>> = vec![];
         for _ in 0..default_number_of_starting_buckets {
             buckets.push(vec![]);
         }
+        let hasher = DefaultSimpleHasher::new();
 
         HashTable {
             buckets,
             total_entries: 0,
+            hasher,
         }
     }
 }
 
-impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
-    pub fn new() -> HashTable<K, V> {
+impl<K, V> HashTable<K, V, DefaultSimpleHasher>
+where
+    K: std::hash::Hash + PartialEq,
+{
+    pub fn new() -> HashTable<K, V, DefaultSimpleHasher> {
         Default::default()
     }
 
-    pub fn with_capacity(capacity: usize) -> HashTable<K, V> {
+    pub fn with_capacity(capacity: usize) -> HashTable<K, V, DefaultSimpleHasher> {
         let mut buckets: Vec<Vec<(K, V)>> = vec![];
         for _ in 0..capacity {
             buckets.push(vec![]);
@@ -41,12 +69,32 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         HashTable {
             buckets,
             total_entries: 0,
+            hasher: DefaultSimpleHasher::new(),
+        }
+    }
+}
+
+impl<K, V, H> HashTable<K, V, H>
+where
+    K: std::hash::Hash + PartialEq,
+    H: SimpleHasher<K>,
+{
+    pub fn with_hasher(hasher: H) -> HashTable<K, V, H> {
+        let mut buckets: Vec<Vec<(K, V)>> = vec![];
+        for _ in 0..10 {
+            buckets.push(vec![]);
+        }
+
+        HashTable {
+            buckets,
+            total_entries: 0,
+            hasher,
         }
     }
 
     pub fn insert(&mut self, mut k: K, v: V) -> Option<V> {
         // check if this key is being used
-        let hash = calculate_hash(&k);
+        let hash = self.hasher.hash(&k);
         let bucket_index = hash as usize % self.buckets.len();
         let mut to_remove = None;
         for (pos, (ek, _)) in self.buckets[bucket_index].iter().enumerate() {
@@ -74,15 +122,14 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         let new_load_factor = (self.total_entries + 1) as f64 / self.buckets.len() as f64;
         if new_load_factor > 0.75 {
             let mut new_buckets: Vec<Vec<(K, V)>> = vec![];
-            let num_buckets = self.buckets.len();
-            let extended_number_of_buckets = num_buckets * 2;
+            let extended_number_of_buckets = self.buckets.len() * 2;
             for _ in 0..extended_number_of_buckets {
                 new_buckets.push(vec![]);
             }
 
             for mut bucket in self.buckets.drain(..) {
                 for (ek, ev) in bucket.drain(..) {
-                    let hash = calculate_hash(&ek);
+                    let hash = self.hasher.hash(&ek);
                     let new_bucket_index = hash as usize % new_buckets.len();
                     new_buckets[new_bucket_index].push((ek, ev));
                 }
@@ -92,7 +139,7 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         }
 
         // then add the new item (give up ownership late so we can easily access the value for returning)
-        let hash = calculate_hash(&k);
+        let hash = self.hasher.hash(&k);
         let bucket_index = hash as usize % self.buckets.len();
         self.buckets[bucket_index].push((k, v));
         self.total_entries += 1;
@@ -106,7 +153,7 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
     }
 
     pub fn get(&self, k: &K) -> Option<&V> {
-        let hash = calculate_hash(k);
+        let hash = self.hasher.hash(k);
         let bucket_index = hash as usize % self.buckets.len();
         for (ek, v) in &self.buckets[bucket_index] {
             if ek == k {
@@ -117,7 +164,7 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
     }
 
     pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
-        let hash = calculate_hash(k);
+        let hash = self.hasher.hash(k);
         let bucket_index = hash as usize % self.buckets.len();
         for (ek, v) in &mut self.buckets[bucket_index] {
             if ek == k {
@@ -131,7 +178,7 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
         self.buckets.len()
     }
 
-    pub fn entry(&mut self, k: K) -> Entry<'_, K, V> {
+    pub fn entry(&mut self, k: K) -> Entry<'_, K, V, H> {
         if self.get_mut(&k).is_some() {
             Entry::Occupied { ht: self, k }
         } else {
@@ -140,12 +187,26 @@ impl<K: std::hash::Hash + PartialEq, V> HashTable<K, V> {
     }
 }
 
-pub enum Entry<'a, K, V> {
-    Occupied { ht: &'a mut HashTable<K, V>, k: K },
-    Vacant { ht: &'a mut HashTable<K, V>, k: K },
+pub enum Entry<'a, K, V, H>
+where
+    K: Hash,
+    H: SimpleHasher<K>,
+{
+    Occupied {
+        ht: &'a mut HashTable<K, V, H>,
+        k: K,
+    },
+    Vacant {
+        ht: &'a mut HashTable<K, V, H>,
+        k: K,
+    },
 }
 
-impl<'a, K: PartialEq + Hash, V> Entry<'a, K, V> {
+impl<'a, K, V, H> Entry<'a, K, V, H>
+where
+    K: PartialEq + Hash,
+    H: SimpleHasher<K>,
+{
     pub fn or_insert(self, v: V) -> &'a mut V {
         match self {
             Entry::Occupied { k, ht } => {
@@ -162,7 +223,7 @@ pub struct HashTableIterator<'a, K, V> {
     buckets_iterator: Box<dyn Iterator<Item = &'a Vec<(K, V)>> + 'a>,
 }
 
-impl<'a, K, V> IntoIterator for &'a HashTable<K, V> {
+impl<'a, K: Hash, V, H: SimpleHasher<K>> IntoIterator for &'a HashTable<K, V, H> {
     type Item = &'a (K, V);
 
     type IntoIter = HashTableIterator<'a, K, V>;
@@ -201,7 +262,9 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
 
 #[cfg(test)]
 mod tests {
-    use crate::HashTable;
+    use std::hash::Hash;
+
+    use crate::{HashTable, SimpleHasher};
 
     #[derive(PartialEq, PartialOrd, Debug, Eq, Clone, Ord)]
     struct User {
@@ -249,10 +312,22 @@ mod tests {
         assert_eq!(result, expected_result);
     }
 
-    // THIS TEST LIES!
     #[test]
     fn test_collisions() {
-        let mut hash_table = HashTable::with_capacity(5);
+        struct SillyHasher;
+        impl<K> SimpleHasher<K> for SillyHasher
+        where
+            K: Hash,
+        {
+            fn hash(&self, _: &K) -> u64 {
+                0
+            }
+        }
+
+        // The SillyHasher will ensure that all entries are always stored i nthe first bucket making this a list,
+        // but I believe correctly testing that collisions are handled by linking entries and iterating through the
+        // entries when looking by matching keys
+        let mut hash_table = HashTable::with_hasher(SillyHasher {});
         hash_table.insert(
             "gedalia",
             User {
@@ -287,8 +362,6 @@ mod tests {
         assert_eq!(theo_result, expected_theo_result);
     }
 
-    // This test sort of does its job; I want to improve it to check that the capcity does not increase
-    // when there is enough space for the next elemtn coming in
     #[test]
     fn test_dynamic_resizing() {
         let mut hash_table = HashTable::with_capacity(9);
@@ -320,15 +393,24 @@ mod tests {
                 name: "avery".to_string(),
                 age: 23,
             },
-            User {
-                name: "caine".to_string(),
-                age: 22,
-            },
         ];
 
         for user in users {
             hash_table.insert(user.name.to_string(), user);
+            assert_eq!(hash_table.capacity(), 9);
         }
+
+        hash_table.insert(
+            "caine".into(),
+            User {
+                name: "caine".to_string(),
+                age: 22,
+            },
+        );
+
+        assert_ne!(hash_table.capacity(), 9);
+        assert!(hash_table.capacity() > 9);
+        assert_eq!(hash_table.capacity(), 18);
 
         let gedalia_result = hash_table.get(&String::from("gedalia"));
         let caine_result = hash_table.get(&String::from("caine"));
@@ -346,10 +428,6 @@ mod tests {
 
         assert_eq!(gedalia_result, expected_gedalia_result);
         assert_eq!(caine_result, expected_caine_result);
-
-        assert!(hash_table.capacity() > 9);
-        assert_eq!(hash_table.capacity(), 18);
-        assert_ne!(hash_table.capacity(), 9);
     }
 
     #[test]
@@ -418,7 +496,7 @@ mod tests {
 
     #[test]
     fn test_entry_interface() {
-        let mut hash_table: HashTable<&str, User> = HashTable::new();
+        let mut hash_table = HashTable::new();
 
         let g_backup = User {
             name: "gedalia".to_string(),
