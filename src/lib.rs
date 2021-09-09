@@ -188,21 +188,31 @@ where
                 keys.push(k);
             }
         }
-        Keys {
-            inner: keys.into_iter(),
-        }
+        Keys { inner: keys }
     }
 }
 
 pub struct Keys<K> {
-    inner: IntoIter<K>,
+    inner: Vec<K>,
 }
 
-impl<K> Iterator for Keys<K> {
+impl<K> IntoIterator for Keys<K> {
     type Item = K;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+    type IntoIter = IntoIter<K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl<'a, K> IntoIterator for &'a Keys<K> {
+    type Item = &'a K;
+
+    type IntoIter = std::slice::Iter<'a, K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter()
     }
 }
 
@@ -598,6 +608,12 @@ mod tests {
         }
 
         let keys = hash_table.into_keys();
+
+        for k in &keys {
+            let found = users.binary_search_by(|u| u.name.cmp(&k));
+            assert!(found.is_ok());
+        }
+
         for k in keys {
             let found = users.binary_search_by(|u| u.name.cmp(&k));
             assert!(found.is_ok());
