@@ -1,5 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::vec::IntoIter;
 
 pub trait SimpleHasher<K>
 where
@@ -178,6 +179,40 @@ where
         } else {
             Entry::Vacant { ht: self, k }
         }
+    }
+
+    pub fn into_keys(self) -> Keys<K> {
+        let mut keys = vec![];
+        for b in self.buckets {
+            for (k, _) in b {
+                keys.push(k);
+            }
+        }
+        Keys { inner: keys }
+    }
+}
+
+pub struct Keys<K> {
+    inner: Vec<K>,
+}
+
+impl<K> IntoIterator for Keys<K> {
+    type Item = K;
+
+    type IntoIter = IntoIter<K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl<'a, K> IntoIterator for &'a Keys<K> {
+    type Item = &'a K;
+
+    type IntoIter = std::slice::Iter<'a, K>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter()
     }
 }
 
@@ -529,5 +564,59 @@ mod tests {
         let old_user = hash_table.insert("gedalia", old_g).unwrap(); // second time using key so we should overwrite entry's value and return old value
         assert_eq!(old_user.name, "not gedalia!");
         assert_eq!(old_user.age, 27);
+    }
+
+    #[test]
+    fn test_into_keys() {
+        let mut hash_table = HashTable::with_capacity(9);
+
+        let mut users = vec![
+            User {
+                name: "gedalia".to_string(),
+                age: 27,
+            },
+            User {
+                name: "theo".to_string(),
+                age: 0,
+            },
+            User {
+                name: "aviva".to_string(),
+                age: 26,
+            },
+            User {
+                name: "chani".to_string(),
+                age: 25,
+            },
+            User {
+                name: "nachmi".to_string(),
+                age: 24,
+            },
+            User {
+                name: "avery".to_string(),
+                age: 23,
+            },
+            User {
+                name: "caine".to_string(),
+                age: 22,
+            },
+        ];
+
+        users.sort();
+
+        for user in &users {
+            hash_table.insert(user.name.to_string(), user);
+        }
+
+        let keys = hash_table.into_keys();
+
+        for k in &keys {
+            let found = users.binary_search_by(|u| u.name.cmp(&k));
+            assert!(found.is_ok());
+        }
+
+        for k in keys {
+            let found = users.binary_search_by(|u| u.name.cmp(&k));
+            assert!(found.is_ok());
+        }
     }
 }
