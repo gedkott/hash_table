@@ -1,5 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::mem;
+use std::slice;
 use std::vec::IntoIter;
 
 pub trait SimpleHasher<K>
@@ -39,7 +41,7 @@ where
 {
     fn default() -> Self {
         let default_number_of_starting_buckets = 10;
-        let mut buckets: Vec<Vec<(K, V)>> = vec![];
+        let mut buckets = vec![];
         for _ in 0..default_number_of_starting_buckets {
             buckets.push(vec![]);
         }
@@ -55,14 +57,14 @@ where
 
 impl<K, V> HashTable<K, V, DefaultSimpleHasher>
 where
-    K: std::hash::Hash + PartialEq,
+    K: Hash + PartialEq,
 {
     pub fn new() -> HashTable<K, V, DefaultSimpleHasher> {
         Default::default()
     }
 
     pub fn with_capacity(capacity: usize) -> HashTable<K, V, DefaultSimpleHasher> {
-        let mut buckets: Vec<Vec<(K, V)>> = vec![];
+        let mut buckets = vec![];
         for _ in 0..capacity {
             buckets.push(vec![]);
         }
@@ -77,7 +79,7 @@ where
 
 impl<K, V, H> HashTable<K, V, H>
 where
-    K: std::hash::Hash + PartialEq,
+    K: Hash + PartialEq,
     H: SimpleHasher<K>,
 {
     pub fn with_hasher(hasher: H) -> HashTable<K, V, H> {
@@ -93,13 +95,13 @@ where
         }
     }
 
-    pub fn insert(&mut self, mut k: K, v: V) -> Option<V> {
+    pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         // check if this key is being used
         let hash = self.hasher.hash(&k);
         let bucket_index = hash as usize % self.buckets.len();
         let mut to_remove = None;
         for (pos, (ek, _)) in self.buckets[bucket_index].iter().enumerate() {
-            if ek == &mut k {
+            if ek == &k {
                 // we are using a value for this key that needs to be replaced
                 to_remove = Some(pos);
                 break;
@@ -107,7 +109,7 @@ where
         }
         match to_remove {
             Some(index) => {
-                let (_, ov) = std::mem::replace(&mut self.buckets[bucket_index][index], (k, v));
+                let (_, ov) = mem::replace(&mut self.buckets[bucket_index][index], (k, v));
                 Some(ov)
             }
             None => {
@@ -121,7 +123,7 @@ where
         // first check if we need to prepare for capacity changes
         let new_load_factor = (self.total_entries + 1) as f64 / self.buckets.len() as f64;
         if new_load_factor > 0.75 {
-            let mut new_buckets: Vec<Vec<(K, V)>> = vec![];
+            let mut new_buckets = vec![];
             let extended_number_of_buckets = self.buckets.len() * 2;
             for _ in 0..extended_number_of_buckets {
                 new_buckets.push(vec![]);
@@ -226,7 +228,7 @@ impl<K> IntoIterator for Keys<K> {
 impl<'a, K> IntoIterator for &'a Keys<K> {
     type Item = &'a K;
 
-    type IntoIter = std::slice::Iter<'a, K>;
+    type IntoIter = slice::Iter<'a, K>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.iter()
@@ -268,8 +270,8 @@ where
 }
 
 pub struct HashTableIterator<'a, K, V> {
-    elements_iterator: Box<dyn Iterator<Item = &'a (K, V)> + 'a>,
-    buckets_iterator: Box<dyn Iterator<Item = &'a Vec<(K, V)>> + 'a>,
+    elements_iterator: slice::Iter<'a, (K, V)>,
+    buckets_iterator: slice::Iter<'a, Vec<(K, V)>>,
 }
 
 impl<'a, K: Hash, V, H: SimpleHasher<K>> IntoIterator for &'a HashTable<K, V, H> {
@@ -285,8 +287,8 @@ impl<'a, K: Hash, V, H: SimpleHasher<K>> IntoIterator for &'a HashTable<K, V, H>
             .map(|bi| bi.iter())
             .unwrap_or_else(|| [].iter());
         HashTableIterator {
-            elements_iterator: Box::new(elements_iterator),
-            buckets_iterator: Box::new(buckets_iterator),
+            elements_iterator,
+            buckets_iterator,
         }
     }
 }
@@ -302,7 +304,7 @@ impl<'a, K, V> Iterator for HashTableIterator<'a, K, V> {
             self.buckets_iterator.next().and_then(|b| {
                 // bucket is available so we are recursing
                 let elements_iterator = b.iter();
-                self.elements_iterator = Box::new(elements_iterator);
+                self.elements_iterator = elements_iterator;
                 self.next()
             })
         })
