@@ -190,6 +190,23 @@ where
         }
         Keys { inner: keys }
     }
+
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        let hash = self.hasher.hash(key);
+        let bucket_index = hash as usize % self.buckets.len();
+        let bucket_iter = self.buckets[bucket_index].iter_mut().enumerate();
+        let mut index = None;
+        for (i, (ek, _)) in bucket_iter {
+            if ek == key {
+                index = Some(i);
+            }
+        }
+
+        index.map(|i| {
+            let (_, rv) = self.buckets[bucket_index].remove(i);
+            rv
+        })
+    }
 }
 
 pub struct Keys<K> {
@@ -618,5 +635,45 @@ mod tests {
             let found = users.binary_search_by(|u| u.name.cmp(&k));
             assert!(found.is_ok());
         }
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut hash_table = HashTable::new();
+
+        let mut users = vec![
+            User {
+                name: "gedalia".to_string(),
+                age: 27,
+            },
+            User {
+                name: "theo".to_string(),
+                age: 0,
+            },
+            User {
+                name: "aviva".to_string(),
+                age: 26,
+            },
+        ];
+
+        users.sort();
+
+        for user in users {
+            hash_table.insert(user.name.to_string(), user);
+        }
+
+        let ov = hash_table.remove(&"gedalia".into());
+
+        assert_eq!(
+            ov,
+            Some(User {
+                name: "gedalia".to_string(),
+                age: 27,
+            })
+        );
+
+        let ov = hash_table.remove(&"no_one".into());
+
+        assert_eq!(ov, None)
     }
 }
