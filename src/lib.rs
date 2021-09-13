@@ -205,7 +205,7 @@ where
         }
 
         index.map(|i| {
-            let (_, rv) = self.buckets[bucket_index].remove(i);
+            let (_, rv) = self.buckets[bucket_index].swap_remove(i);
             rv
         })
     }
